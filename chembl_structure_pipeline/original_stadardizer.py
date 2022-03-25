@@ -18,7 +18,6 @@ from .exclude_flag import exclude_flag
 import rdkit
 import math
 import sys
-from standardiser import rules, neutralise
 
 rdkversion = rdkit.__version__.split(".")
 if rdkversion < ["2019", "09", "2"]:
@@ -88,7 +87,7 @@ def remove_hs_from_mol(m):
     - Hs with a wedged/dashed bond to them
     - Hs bonded to atoms with tetrahedral stereochemistry set
     - Hs bonded to atoms that have three (or more) ring bonds that are not simply protonated
-    - Hs bonded to atoms in a non-default valence state that are not simply protonated
+    - Hs bonded to atoms in a non-default valence state that are not simply protonated 
 
 
     For the above, the definition of "simply protonated" is an atom with charge = +1 and
@@ -265,11 +264,19 @@ def cleanup_drawing_mol(m):
 
 def flatten_tartrate_mol(m):
     tartrate = Chem.MolFromSmarts('OC(=O)C(O)C(O)C(=O)O')
+    # make sure we only match free tartrate/tartaric acid fragments
+    params = Chem.AdjustQueryParameters.NoAdjustments()
+    params.adjustDegree = True
+    params.adjustDegreeFlags = Chem.AdjustQueryWhichFlags.ADJUST_IGNORENONE
+    tartrate = Chem.AdjustQueryProperties(tartrate, params)
     matches = m.GetSubstructMatches(tartrate)
     if matches:
         m = Chem.Mol(m)
-        m.GetAtomWithIdx(3).SetChiralTag(Chem.ChiralType.CHI_UNSPECIFIED)
-        m.GetAtomWithIdx(5).SetChiralTag(Chem.ChiralType.CHI_UNSPECIFIED)
+        for match in matches:
+            m.GetAtomWithIdx(match[3]).SetChiralTag(
+                Chem.ChiralType.CHI_UNSPECIFIED)
+            m.GetAtomWithIdx(match[5]).SetChiralTag(
+                Chem.ChiralType.CHI_UNSPECIFIED)
     return m
 
 
@@ -453,11 +460,8 @@ def standardize_mol(m, check_exclusion=True):
         m = remove_hs_from_mol(m)
         m = normalize_mol(m)
         m = uncharge_mol(m)
-        m = neutralise.run(m)
         m = flatten_tartrate_mol(m)
         m = cleanup_drawing_mol(m)
-        m = rules.run(m , verbose=True)
-        Chem.SanitizeMol(m)
 
     return m
 
